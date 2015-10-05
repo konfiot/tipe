@@ -1,4 +1,4 @@
-import math
+from math import sqrt, atan2, asin
 import numpy as np
 import matplotlib.pyplot as plt
 import qmath
@@ -54,7 +54,7 @@ def detect_sat(d, std_dev, thres=20):
 	return False
 
 def norm(array):
-	return math.sqrt(sum([x**2 for x in array]))
+	return sqrt(sum([x**2 for x in array]))
 
 def normalize(array):
 	return [x/norm(array) for x in array]
@@ -77,8 +77,8 @@ def get_raw_data(f):
 print("Getting calibration data")
 
 cal_data = get_cal_data(CALIBRATION_FILE)
-offsets = [0]
-std_dev = [0]
+offsets = []
+std_dev = []
 
 for data_set in cal_data[1:]:
 	offsets.append(sum(data_set) / len(data_set))
@@ -112,11 +112,20 @@ while not terminate:
 		terminate = True
 		continue
 
+	for i in range(len(raw_data[1])):
+		raw_data[1][i] -= offsets[i]
+
 	p_t, p_quat, p_w = previous_data[-1] # Get the old data
-	new_quat_rot = qmath.quaternion(norm(raw_data[1]) * (raw_data[0] - p_t), normalize([raw_data[1][i] - offsets[i] for i in range(len(raw_data[1]))])) # Calculate the new quaternion
+	new_quat_rot = qmath.quaternion(norm(raw_data[1]) * (raw_data[0] - p_t), normalize([raw_data[1][i] for i in range(len(raw_data[1]))])) # Calculate the new quaternion
 
 	previous_data.append((raw_data[0], p_quat * new_quat_rot, raw_data[1])) # Add the new data to the old
 
+t = [v[0] for v in previous_data]
+quat = [v[1] for v in previous_data]
+
+plt.plot(t, [atan2(2*q[0]*q[1] + q[2]*q[3], 1 - 2*(q[1]**2 + q[2]**2)) for q in quat])
+plt.plot(t, [asin(2*(q[0] * q[2] - q[3] * q[1])) for q in quat])
+plt.plot(t, [atan2(2*q[0]*q[3] + q[1]*q[2], 1 - 2*(q[2]**2 + q[3]**2)) for q in quat])
 
 
 plt.show()
