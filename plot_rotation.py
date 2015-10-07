@@ -1,4 +1,5 @@
-from math import sqrt, atan2, asin
+import socket
+from math import sqrt, atan2, asin, pi
 import numpy as np
 import matplotlib.pyplot as plt
 import qmath
@@ -14,8 +15,8 @@ class bcolors:
 	UNDERLINE = '\033[4m'
 
 CALIBRATION_FILE = "cal.csv"
-DATA_FILE = 'tours.csv'
-SEPARATOR = ';'
+DATA_FILE = 'rot90.csv'
+SEPARATOR = ','
 
 
 QUAT_ROT_INIT = qmath.quaternion(0, [0, 0, 0]) #Init the quaternion to the identity rotation (q = 1 + 0i + 0j + 0k = 1)
@@ -34,12 +35,12 @@ def integrate(t, y, origin = 0):
 
 def get_cal_data(filename, offsets = None):
 	data = []
-	with open(filename) as file:
-		line = file.readline()
+	with open(filename) as f:
+		line = f.readline()
 		while line:
-			data.append(line.split(SEPARATOR))
-			line = file.readline()
-	return [[float(r[i].replace(",", ".")) - (offsets[i] if offsets is not None else 0) for r in data[1:]] for i in range(len(data[0]))]
+			data.append(line.split(";"))
+			line = f.readline()
+	return [[float(r[i].replace(",", ".")) for r in data[1:]] for i in range(len(data[0]))]
 
 def detect_sat(d, std_dev, thres=20):
 	count = 0
@@ -60,18 +61,17 @@ def normalize(array):
 	return [x/norm(array) for x in array]
 
 def get_raw_data(f):
-	line = f.readline()
+	line, _ = f.recvfrom(8192)
 
 	if not line:
 		return False
-
 
 	data = [float(x.replace(",", ".")) for x in line.split(SEPARATOR)]
 
 	return [
 		data[0], # Time
-		data[1:4], # Rotation velocity
-		data[4:7] # Linear acceleration
+		data[6:9], # Rotation velocity
+		data[2:5] # Linear acceleration
 	]
 
 print("Getting calibration data")
@@ -99,33 +99,69 @@ print("Calibration done\n")
 
 print("Integrating")
 
-previous_data = [(TIME_INIT, QUAT_ROT_INIT, W_ARRAY_INIT)]
-terminate = False
 
 f = open(DATA_FILE, "r")
 print("Data contains: " + f.readline())
 
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+s.bind(("", 5555))
+
+plt.ion()
+plt.show()
+fig, ax = plt.subplots()
+lines = ax.plot([],[],[],[],[],[])
+
+ax.set_ylim(-pi, pi)
+
+angles = [[], [], []]
+t = []
+c = 0
+previous_data = [(TIME_INIT, QUAT_ROT_INIT, W_ARRAY_INIT)]
+terminate = False
+
 while not terminate:
-	raw_data = get_raw_data(f)
+	raw_data = get_raw_data(s)
 
 	if not raw_data: # Escape the loop if there's no more data
 		terminate = True
 		continue
 
-	for i in range(len(raw_data[1])):
+	for i in range(len(offsets)):
 		raw_data[1][i] -= offsets[i]
 
-	p_t, p_quat, p_w = previous_data[-1] # Get the old data
-	new_quat_rot = qmath.quaternion(norm(raw_data[1]) * (raw_data[0] - p_t), normalize([raw_data[1][i] for i in range(len(raw_data[1]))])) # Calculate the new quaternion
+	t.append(raw_data[0])
 
-	previous_data.append((raw_data[0], p_quat * new_quat_rot, raw_data[1])) # Add the new data to the old
+
+	p_t, p_quat, p_w = previous_data[-1] # Get the old data
+	new_quat_rot = qmath.quaternion(norm(raw_data[1]) * (raw_data[0] - t[0] - p_t), normalize(raw_data[1])) # Calculate the new quaternion
+
+	q = p_quat * new_quat_rot
+
+	previous_data.append((raw_data[0] - t[0], q, raw_data[1])) # Add the new data to the old
+
+	angles[0].append(atan2(2*q[0]*q[1] + q[2]*q[3], 1 - 2*(q[1]**2 + q[2]**2)))
+	angles[1].append(asin(2*(q[0] * q[2] - q[3] * q[1])))
+	angles[2].append(atan2(2*q[0]*q[3] + q[1]*q[2], 1 - 2*(q[2]**2 + q[3]**2)))
+
+	print("%.5f" % angles[0][-1]) + "\t",
+	print("%.5f" % angles[1][-1]) + "\t",
+	print("%.5f" % angles[2][-1])
+
+	c += 1
+
+	if c%5 == 0:
+		for i in range(len(lines)):
+			lines[i].set_data(t, angles[i])
+		plt.draw()
+		ax.set_xlim(t[0], raw_data[0])
+
+plt.ioff()
+plt.show()
+
 
 t = [v[0] for v in previous_data]
 quat = [v[1] for v in previous_data]
 
-plt.plot(t, [atan2(2*q[0]*q[1] + q[2]*q[3], 1 - 2*(q[1]**2 + q[2]**2)) for q in quat])
-plt.plot(t, [asin(2*(q[0] * q[2] - q[3] * q[1])) for q in quat])
-plt.plot(t, [atan2(2*q[0]*q[3] + q[1]*q[2], 1 - 2*(q[2]**2 + q[3]**2)) for q in quat])
 
-
-plt.show()
