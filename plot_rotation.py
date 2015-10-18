@@ -112,13 +112,16 @@ s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
 s.bind(("", 5555))
 
 plt.ion()
-fig, ax = plt.subplots()
-lines = ax.plot([],[],[],[],[],[])
+fig, ax = plt.subplots(2, sharex=True)
+lines_rot = ax[0].plot([],[],[],[],[],[])
+lines_acc = ax[1].plot([],[],[],[],[],[])
 
-ax.legend(lines, ["phi", "theta", "psi"])
+ax[0].legend(lines_rot, ["phi", "theta", "psi"])
+ax[1].legend(lines_acc, ["x", "y", "z"])
 plt.show()
 
-ax.set_ylim(-pi, pi)
+ax[0].set_ylim(-pi, pi)
+ax[1].set_ylim(-20, 20)
 
 angles = [[], [], []]
 t = []
@@ -150,21 +153,25 @@ while not terminate:
 	angles[0].append(phi) # Compute Euler angles and display them
 	angles[1].append(theta)
 	angles[2].append(psi)
-	print("%.4f" % angles[0][-1] + "\t", end="")
-	print("%.4f" % angles[1][-1] + "\t", end="")
-	print("%.4f" % angles[2][-1])
+	#print("%.4f" % angles[0][-1] + "\t", end="")
+	#print("%.4f" % angles[1][-1] + "\t", end="")
+	#print("%.4f" % angles[2][-1])
 
-	#a = q.inverse() * qmath.quaternion([0] + raw_data[1]) * q
 
-	
+	a = q * Quaternion([0] + raw_data[2]) * q.inverted()
+	print(a)
+
+
 
 # Display dara
 	c += 1
 	if c%5 == 0:
-		for i in range(len(lines)):
-			lines[i].set_data(t, angles[i])
+		for i in range(len(lines_rot)):
+			lines_rot[i].set_data(t, angles[i])
+		for i in range(len(lines_acc)):
+			lines_acc[i].set_data(t, a[i+1])
 		plt.draw()
-		ax.set_xlim(max(t[0], raw_data[0]-TIMEFRAME), raw_data[0])
+		ax[0].set_xlim(max(t[0], raw_data[0]-TIMEFRAME), raw_data[0])
 
 plt.ioff()
 plt.show()
