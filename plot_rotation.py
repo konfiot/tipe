@@ -143,6 +143,7 @@ while not terminate:
 
 
 	p_t, p_quat, p_w = previous_data[-1] # Get the old data
+
 	new_quat_rot = Quaternion(normalize(raw_data[1]), norm(raw_data[1]) * (raw_data[0] - t[0] - p_t)) # Calculate the new quaternion
 
 	q = p_quat * new_quat_rot
@@ -150,15 +151,12 @@ while not terminate:
 	previous_data.append((raw_data[0] - t[0], q, raw_data[1])) # Add the new data to the old
 
 	phi, theta, psi = q.to_euler()
-	angles[0].append(phi) # Compute Euler angles and display them
+	angles[0].append(phi) # Compute Euler angles
 	angles[1].append(theta)
 	angles[2].append(psi)
-	#print("%.4f" % angles[0][-1] + "\t", end="")
-	#print("%.4f" % angles[1][-1] + "\t", end="")
-	#print("%.4f" % angles[2][-1])
 
 
-	a = q * Quaternion([0] + raw_data[2]) * q.inverted()
+	a = q * Quaternion([0] + raw_data[2]) * q.inverted() # Get acceleration in the fixed reference frame
 	print(a)
 
 
