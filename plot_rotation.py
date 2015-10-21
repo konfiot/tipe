@@ -25,16 +25,6 @@ QUAT_ROT_INIT = Quaternion([1, 0, 0, 0]) #Init the quaternion to the identity ro
 W_ARRAY_INIT = [0, 0, 0]
 TIME_INIT = 0
 
-
-
-def integrate(t, y, origin = 0):
-	out = [0]
-	for i in range(1, max(len(t), len(y))):
-		out.append(out[-1] + ((t[i] - t[i-1]) * (y[i] + y[i-1]) / 2))
-
-	return out
-
-
 def get_cal_data(filename, offsets = None):
 	data = []
 	with open(filename) as f:
