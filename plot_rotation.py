@@ -16,7 +16,8 @@ class bcolors:
 	BOLD = '\033[1m'
 	UNDERLINE = '\033[4m'
 
-CALIBRATION_FILE = "cal.csv"
+CALIBRATION_FILE_GYROS = "cal_gyros.csv"
+CALIBRATION_FILES_ACCELEROMETER = ["cal_acc_x.csv", "cal_acc_y.csv", "cal_acc_z.csv"]
 DATA_FILE = 'rot90.csv'
 SEPARATOR = ','
 TIMEFRAME = 10
@@ -32,6 +33,7 @@ def get_cal_data(filename, offsets = None):
 		while line:
 			data.append(line.split(";"))
 			line = f.readline()
+	print(data[0], data[1])
 	return [[float(r[i].replace(",", ".")) for r in data[1:]] for i in range(len(data[0]))]
 
 def detect_sat(d, std_dev, thres=20):
@@ -69,34 +71,32 @@ def get_raw_data(f):
 
 print("Getting calibration data")
 
-cal_data = get_cal_data(CALIBRATION_FILE)
-offsets = []
-std_dev = []
+print("Gyros ---")
+cal_data_gyros = get_cal_data(CALIBRATION_FILE_GYROS)
+offsets_gyros = []
 
-for data_set in cal_data[1:]:
-	offsets.append(sum(data_set) / len(data_set))
-	std_dev.append(np.std(data_set))
+for data_set in cal_data_gyros[1:]:
+	offsets_gyros.append(sum(data_set) / len(data_set))
 
-print("Offsets: ", offsets)
-print("Standard deviation", std_dev)
+print("Offsets: ", offsets_gyros)
+
+print("Accelerometer ---")
+offsets_accelerometer  = []
+cal_values = [[], [], []]
+
+for i, f in enumerate(CALIBRATION_FILES_ACCELEROMETER):
+	cal_data_accelerometer = get_cal_data(f)
+	for j in range(len(cal_values)):
+		if j != i:
+			cal_values[j] += cal_data_accelerometer[j]
+
+offsets_accelerometer = [sum(c) / len(c) for c in cal_values]
+
+print("Offsets: ", offsets_accelerometer)
 
 print("Calibration done\n")
 
-#print("Detecting saturations")
-#
-#for i in range(1, len(data)):
-#	if detect_sat(data[i], std_dev[i]):
-#		print(bcolors.FAIL + "WARNING : Saturation detected" + bcolors.ENDC)
-#
-#print("End of saturation detection\n")
-
-print("Integrating")
-
-
-f = open(DATA_FILE, "r")
-print("Data contains: " + f.readline())
-
-s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # Setting up UDP Socket
 s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
 s.bind(("", 5555))
@@ -114,6 +114,7 @@ ax[0].set_ylim(-pi, pi)
 ax[1].set_ylim(-20, 20)
 
 angles = [[], [], []]
+acc = [[], [], []]
 t = []
 c = 0
 previous_data = [(TIME_INIT, QUAT_ROT_INIT, W_ARRAY_INIT)]
@@ -126,8 +127,11 @@ while not terminate:
 		terminate = True
 		continue
 
-	for i in range(len(offsets)):
-		raw_data[1][i] -= offsets[i]
+	for i in range(len(offsets_gyros)):
+		raw_data[1][i] -= offsets_gyros[i]
+
+	for i in range(len(offsets_accelerometer)):
+		raw_data[2][i] -= offsets_accelerometer[i]
 
 	t.append(raw_data[0])
 
@@ -147,6 +151,9 @@ while not terminate:
 
 
 	a = q * Quaternion([0] + raw_data[2]) * q.inverted() # Get acceleration in the fixed reference frame
+	a[3] -= 9.813
+	for i in range(len(acc)):
+		acc[i].append(a[i+1])
 	print(a)
 
 
@@ -157,7 +164,7 @@ while not terminate:
 		for i in range(len(lines_rot)):
 			lines_rot[i].set_data(t, angles[i])
 		for i in range(len(lines_acc)):
-			lines_acc[i].set_data(t, a[i+1])
+			lines_acc[i].set_data(t, acc[i])
 		plt.draw()
 		ax[0].set_xlim(max(t[0], raw_data[0]-TIMEFRAME), raw_data[0])
 
