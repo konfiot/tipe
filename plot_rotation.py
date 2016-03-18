@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from mathutils import Quaternion
 import math
 
+
 class bcolors:
 	HEADER = '\033[95m'
 	OKBLUE = '\033[94m'
@@ -72,7 +73,7 @@ def get_raw_data(f):
 		data[0], # Time
 		data[6:9], # Rotation velocity
 		data[2:5], # Linear acceleration
-		data[10:13]
+		data[10:13] # Magnetometer
 	]
 
 def jacobian(q, d):
@@ -82,18 +83,18 @@ def jacobian(q, d):
 				[2 * d[1] * q[2] - 2 * d[2] * q[1], 2 * d[1] * q[3] - 2 * d[2] * q[0] - 4 * d[3] * q[1], 2 * d[1] * q[0] + 2 * d[2] * q[3] - 4 * d[3] * q[2], 2 * d[1] * q[1] + 2 * d[2] * q[2]]])
 
 def quat_from_static(a, b, a_aim, b_aim, old, dt):
-	f_a = old.inverted()*a_aim*old - a_aim
-	f_b = old.inverted()*b_aim*old - b_aim
+	f_a = old.inverted()*a_aim*old - a
+	f_b = Quaternion([0]*4)#old.inverted()*b_aim*old - b
 
-	j_a = jacobian(a, a_aim)
-	j_b = jacobian(b, b_aim)
+	j_a = jacobian(q, a)
+	j_b = jacobian(q, b)
 
 
 	f = np.bmat([[list(f_a)], [list(f_b)]]).transpose()
 	j = np.bmat([[j_a.transpose(), j_b.transpose()]])
 
 	delta_f = np.dot(j, f)
-	return old - dt * Quaternion(delta_f).normalized()
+	return old - .03 * Quaternion(delta_f).normalized()
 
 print("Getting calibration data")
 
@@ -128,19 +129,25 @@ s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
 s.bind(("", 5555))
 
 plt.ion()
-fig, ax = plt.subplots(2, sharex=True)
+#plt.rc('text', usetex=True)
+fig, ax = plt.subplots(3, sharex=True)
+fig.set_size_inches(10, 10, forward=True)
 lines_rot = ax[0].plot([],[],[],[],[],[])
 lines_acc = ax[1].plot([],[],[],[],[],[])
+lines_mag = ax[2].plot([],[],[],[],[],[])
 
-ax[0].legend(lines_rot, ["phi", "theta", "psi"])
+ax[0].legend(lines_rot, [r"\varphi", r"\theta", r"\psi"])
 ax[1].legend(lines_acc, ["x", "y", "z"])
+ax[2].legend(lines_mag, ["x", "y", "z"])
 plt.show()
 
 ax[0].set_ylim(-pi, pi)
 ax[1].set_ylim(-20, 20)
+ax[2].set_ylim(-1, 1)
 
 angles = [[], [], []]
 acc = [[], [], []]
+mag = [[], [], []]
 t = []
 c = 0
 previous_data = [(TIME_INIT, QUAT_ROT_INIT, W_ARRAY_INIT)]
@@ -170,8 +177,9 @@ while not terminate:
 
 	q = p_quat * new_quat_rot
 
-	q_static = quat_from_static(Quaternion([0] + raw_data[2]).normalized(), Quaternion([0, 0, 0, 1]), Quaternion([0] + raw_data[3]).normalized(), QUAT_MAG_AIM.normalized(), q_static, raw_data[0] - t[0] - p_t).normalized()
+	q_static = quat_from_static(Quaternion([0] + raw_data[2]).normalized(), Quaternion([0] + raw_data[3]).normalized(), Quaternion([0, 0, 0, 1]), QUAT_MAG_AIM.normalized(), q_static, raw_data[0] - t[0] - p_t).normalized()
 
+	#q_static = q
 
 	previous_data.append((raw_data[0] - t[0], q, raw_data[1])) # Add the new data to the old
 
@@ -186,6 +194,11 @@ while not terminate:
 	for i in range(len(acc)):
 		acc[i].append(a[i+1])
 
+	m = q_static * Quaternion([0] + raw_data[3]) * q_static.inverted() # Get acceleration in the fixed reference frame
+	m -= QUAT_MAG_AIM
+	m.normalize()
+	for i in range(len(mag)):
+		mag[i].append(m[i+1])
 
 
 
@@ -196,6 +209,8 @@ while not terminate:
 			lines_rot[i].set_data(t, angles[i])
 		for i in range(len(lines_acc)):
 			lines_acc[i].set_data(t, acc[i])
+		for i in range(len(lines_mag)):
+			lines_mag[i].set_data(t, mag[i])
 		plt.draw()
 		ax[0].set_xlim(max(t[0], raw_data[0]-TIMEFRAME), raw_data[0])
 
