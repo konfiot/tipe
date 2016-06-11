@@ -129,16 +129,20 @@ s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
 s.bind(("", 5555))
 
 plt.ion()
-#plt.rc('text', usetex=True)
+plt.rc('text', usetex=True)
 fig, ax = plt.subplots(3, sharex=True)
 fig.set_size_inches(10, 10, forward=True)
 lines_rot = ax[0].plot([],[],[],[],[],[])
 lines_acc = ax[1].plot([],[],[],[],[],[])
 lines_mag = ax[2].plot([],[],[],[],[],[])
 
-ax[0].legend(lines_rot, [r"\varphi", r"\theta", r"\psi"])
+ax[0].legend(lines_rot, [r'$\varphi$', r'$\theta$', r'$\psi$'])
 ax[1].legend(lines_acc, ["x", "y", "z"])
 ax[2].legend(lines_mag, ["x", "y", "z"])
+
+ax[0].set_ylabel("angle(rad)")
+ax[1].set_ylabel("acceleration($m.s^{-2}$)")
+ax[2].set_ylabel("magnetic field($\mu T$)")
 plt.show()
 
 ax[0].set_ylim(-pi, pi)
@@ -177,9 +181,9 @@ while not terminate:
 
 	q = p_quat * new_quat_rot
 
-	q_static = quat_from_static(Quaternion([0] + raw_data[2]).normalized(), Quaternion([0] + raw_data[3]).normalized(), Quaternion([0, 0, 0, 1]), QUAT_MAG_AIM.normalized(), q_static, raw_data[0] - t[0] - p_t).normalized()
+	#q_static = quat_from_static(Quaternion([0] + raw_data[2]).normalized(), Quaternion([0] + raw_data[3]).normalized(), Quaternion([0, 0, 0, 1]), QUAT_MAG_AIM.normalized(), q_static, raw_data[0] - t[0] - p_t).normalized()
 
-	#q_static = q
+	q_static = q
 
 	previous_data.append((raw_data[0] - t[0], q, raw_data[1])) # Add the new data to the old
 
